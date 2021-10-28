@@ -1,4 +1,4 @@
-# Please don't submit this file. 
+# Please don't submit this file.
 # This file is only for helping you while development
 
 import subprocess, math, time, sys, os, numpy as np
@@ -57,8 +57,12 @@ debugLine = True
 ref = [0, 0, 1]
 sim = Simulation(pybulletConfigs, robotConfigs, refVect=ref)
 
-endEffector = "LHAND"
-targetPosition = np.array([0.5, -0.2, 1.1])
+# This is an example target position for the left end effector. This target
+# position assumes your world frame is located at the base. If your world
+# frame is located at the waist, you will need to transform this vector using
+# the base_to_waist translation.
+endEffector = "LARM_JOINT5"
+targetPosition = np.array([0.37, 0.23, 1.06385])  # x,y,z coordinates in world frame
 
 # Example code. Feel free to modify
 pltTime, pltEFPosition = sim.move_without_PD(endEffector, targetPosition, speed=0.01, orientation=None, threshold=1e-3, maxIter=3000, debug=False, verbose=False)
@@ -67,7 +71,7 @@ pltTime, pltEFPosition = sim.move_without_PD(endEffector, targetPosition, speed=
 # Now plot some graphs
 task1_figure_name = "task1_kinematics.png"
 task1_savefig = True
-# ... 
+# ...
 
 fig = plt.figure(figsize=(6, 4))
 
@@ -82,7 +86,3 @@ plt.subplots_adjust(left=0.15)
 if task1_savefig:
     fig.savefig(task1_figure_name)
 plt.show()
-
-
-
-

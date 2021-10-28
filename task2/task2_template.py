@@ -22,7 +22,7 @@ except:
     gui = True
 
 
-### You may want to change the code from here 
+### You may want to change the code from here
 pybulletConfigs = {
     "simulation": bullet_simulation,
     "pybullet_extra_data": pybullet_data,
@@ -46,9 +46,10 @@ robotConfigs = {
 }
 sim = Simulation(pybulletConfigs, robotConfigs)
 
-task2_jointName = "LARM_JOINT1"
-task2_targetPosition = -0.4
-task2_targetVelocity = 0.0
+# This is an example target (angular) position for the joint LARM_JOINT2
+task2_jointName = "LARM_JOINT2"
+task2_targetPosition = np.deg2rad(-45)  # joint (angular) position in radians
+task2_targetVelocity = 0.0  # joint (angular) velocity in radians per second
 verbose = False
 task2_figure_name = "task2_PD_response.png"
 task2_savefig = False
@@ -58,7 +59,7 @@ task2_savefig = False
 pltTime, pltTarget, pltTorque, pltTorqueTime, pltPosition, pltVelocity = \
     sim.moveJoint(
         task2_jointName, task2_targetPosition, task2_targetVelocity, verbose)
-        
+
 
 # modify the code in below if needed
 fig = plt.figure(figsize=(6, 8))
@@ -82,6 +83,6 @@ plt.suptitle("Task2.2 Response of the controller", size=16)
 plt.tight_layout()
 plt.subplots_adjust(left=0.15)
 
-if task2_savefig: 
+if task2_savefig:
     fig.savefig(task2_figure_name)
 plt.show()
