@@ -118,20 +118,20 @@ class Simulation(Simulation_base):
         else:
             rotation_axis = self.jointRotationAxis[jointName]
 
-            if rotation_axis == np.array([1, 0, 0]):
+            if np.array_equal(rotation_axis, np.array([1, 0, 0])):
                 return np.matrix([
                             [1,0,0],
                             [0,np.cos(np.deg2rad(theta)),-np.sin(np.deg2rad(theta))],
                             [0,np.sin(np.deg2rad(theta)),np.cos(np.deg2rad(theta))]
                         ])
-            elif rotation_axis == np.array([0, 1, 0]):
+            elif np.array_equal(rotation_axis, np.array([0, 1, 0])):
                 ##  TODO investigate sign reversal thing Ana mentioned
                 return np.matrix([
                             [np.cos(np.deg2rad(theta)),0,np.sin(np.deg2rad(theta))],
                             [0,1,0],
                             [-np.sin(np.deg2rad(theta)),0,np.cos(np.deg2rad(theta))]
                         ])
-            elif rotation_axis == np.array([0, 0, 1]):
+            elif np.array_equal(rotation_axis, np.array([0, 0, 1])):
                 return np.matrix([
                             [np.cos(np.deg2rad(theta)),-np.sin(np.deg2rad(theta)),0],
                             [np.sin(np.deg2rad(theta)),np.cos(np.deg2rad(theta)),0],
@@ -153,10 +153,13 @@ class Simulation(Simulation_base):
         
 
         for jointName in self.frameTranslationFromParent:
-            if thetasDict and jointName in thetasDict:
-                rotMatrix = self.getJointRotationalMatrix(jointName, theta=thetasDict[jointName])
-            else:    
-                rotMatrix = self.getJointRotationalMatrix(jointName, self.getJointPos(jointName))
+            if jointName not in ['RHAND', 'LHAND']:
+                if thetasDict and jointName in thetasDict:
+                    rotMatrix = self.getJointRotationalMatrix(jointName, theta=thetasDict[jointName])
+                else:    
+                    rotMatrix = self.getJointRotationalMatrix(jointName, self.getJointPos(jointName))
+            else:
+                rotMatrix = np.identity(3)
 
             # Stacking the rotation matrix and translation vector
             nonAugmentedTransformationMatrix = np.hstack((rotMatrix, np.reshape(self.frameTranslationFromParent[jointName], (3,1))))
@@ -171,23 +174,29 @@ class Simulation(Simulation_base):
             Returns the position and rotation matrix of a given joint using Forward Kinematics
             according to the topology of the Nextage robot.
         """
+
+        if jointName == 'RHAND' or jointName == 'LHAND':
+            jointName = self.jointParents[jointName]
         # Remember to multiply the transformation matrices following the kinematic chain for each arm.
         #TODO modify from here
         # Hint: return two numpy arrays, a 3x1 array for the position vector,
         # and a 3x3 array for the rotation matrix
         #return pos, rotmat
         transformationMatrices = self.getTransformationMatrices(thetasDict)
-    
-        if jointName == 'base_to_dummy' or 'base_to_waist':
-            return transformationMatrices[jointName]
+        # print(transformationMatrices)
+        print("got trans matrixes")
+        if jointName in ['base_to_dummy','base_to_waist']:
+            return np.array([0,0,0]), np.identity(3)
         
         fkMatrix = transformationMatrices[jointName]
         currJoint = self.jointParents[jointName]
-
+        print("initialised fkmatrixs")
         while currJoint != 'base_to_waist':
             fkMatrix = transformationMatrices[currJoint] @ fkMatrix
             currJoint = self.jointParents[currJoint]
 
+        print("HELLOOOOOOOOOs")
+        print(fkMatrix)
         return np.array(fkMatrix[:3, 3].reshape((1,3))), np.array(fkMatrix[:3,:3])
 
     def getJointPosition(self, jointName):
@@ -338,7 +347,8 @@ class Simulation(Simulation_base):
         relevantJoints = self.getRelevantJoints(endEffector)
 
         start_pos = self.getJointPosition(endEffector)
-
+        print(targetPosition)
+        print(start_pos)
         numSteps = (targetPosition-start_pos)/speed
         numSteps = min(numSteps, maxIter)
 
