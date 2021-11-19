@@ -9,6 +9,7 @@ import time
 import yaml
 
 from Pybullet_Simulation_base import Simulation_base
+from time import sleep
 
 class Simulation(Simulation_base):
     """A Bullet simulation involving Nextage robot"""
@@ -53,7 +54,7 @@ class Simulation(Simulation_base):
         'base_to_dummy': np.zeros(3),  # Virtual joint
         'base_to_waist': np.zeros(3),  # Fixed joint
         # TODO: modify from here
-        'CHEST_JOINT0': np.array([0, 0, 0.267]),
+        'CHEST_JOINT0': np.array([0, 0, 1.117]),
         'HEAD_JOINT0': np.array([0, 0, 0.302]),
         'HEAD_JOINT1': np.array([0, 0, 0.066]),
         'LARM_JOINT0': np.array([0.04, 0.135, 0.1015]),
@@ -121,20 +122,19 @@ class Simulation(Simulation_base):
             if np.array_equal(rotation_axis, np.array([1, 0, 0])):
                 return np.matrix([
                             [1,0,0],
-                            [0,np.cos(np.deg2rad(theta)),-np.sin(np.deg2rad(theta))],
-                            [0,np.sin(np.deg2rad(theta)),np.cos(np.deg2rad(theta))]
+                            [0,np.cos(theta),-np.sin(theta)],
+                            [0,np.sin(theta),np.cos(theta)]
                         ])
             elif np.array_equal(rotation_axis, np.array([0, 1, 0])):
-                ##  TODO investigate sign reversal thing Ana mentioned
                 return np.matrix([
-                            [np.cos(np.deg2rad(theta)),0,np.sin(np.deg2rad(theta))],
+                            [np.cos(theta),0,np.sin(theta)],
                             [0,1,0],
-                            [-np.sin(np.deg2rad(theta)),0,np.cos(np.deg2rad(theta))]
+                            [-np.sin(theta),0,np.cos(theta)]
                         ])
             elif np.array_equal(rotation_axis, np.array([0, 0, 1])):
                 return np.matrix([
-                            [np.cos(np.deg2rad(theta)),-np.sin(np.deg2rad(theta)),0],
-                            [np.sin(np.deg2rad(theta)),np.cos(np.deg2rad(theta)),0],
+                            [np.cos(theta),-np.sin(theta),0],
+                            [np.sin(theta),np.cos(theta),0],
                             [0,0,1]
                         ])
             else:
@@ -184,19 +184,23 @@ class Simulation(Simulation_base):
         #return pos, rotmat
         transformationMatrices = self.getTransformationMatrices(thetasDict)
         # print(transformationMatrices)
-        print("got trans matrixes")
+        # print("got trans matrixes")
         if jointName in ['base_to_dummy','base_to_waist']:
             return np.array([0,0,0]), np.identity(3)
         
         fkMatrix = transformationMatrices[jointName]
         currJoint = self.jointParents[jointName]
-        print("initialised fkmatrixs")
+        # print("initialised fkmatrixs")
+        numMatricesIncluded = 1
         while currJoint != 'base_to_waist':
             fkMatrix = transformationMatrices[currJoint] @ fkMatrix
+            numMatricesIncluded += 1
             currJoint = self.jointParents[currJoint]
 
-        print("HELLOOOOOOOOOs")
-        print(fkMatrix)
+        assert numMatricesIncluded == len(self.getRelevantJoints(jointName))
+        
+        # print("HELLOOOOOOOOOs")
+        # print(fkMatrix)
         return np.array(fkMatrix[:3, 3].reshape((1,3))), np.array(fkMatrix[:3,:3])
 
     def getJointPosition(self, jointName):
@@ -213,15 +217,6 @@ class Simulation(Simulation_base):
     def getJointAxis(self, jointName):
         """Get the orientation of a joint in the world frame, leave this unchanged please."""
         return np.array(self.getJointLocationAndOrientation(jointName)[1] @ self.jointRotationAxis[jointName]).squeeze()
-
-# def geomJacobian(jnt2pos, jnt3pos, endEffPos):
-    
-#     ai = np.array([0,0,1])
-#     col0 = np.array(endEffPos + [0])
-#     col1 = np.array(endEffPos + [0]) - np.array(jnt2pos + [0])
-#     col2 = np.array(endEffPos + [0]) - np.array(jnt3pos + [0])
-#     J = np.array([np.cross(ai,col0), np.cross(ai,col1), np.cross(ai,col2)]).T 
-#     return J
 
     def jacobianMatrix(self, endEffector, relevantJoints=None):
         """Calculate the Jacobian Matrix for the Nextage Robot."""
@@ -253,7 +248,7 @@ class Simulation(Simulation_base):
 
         return np.vstack((Jpos, Jvec))
 
-    def calcJacobianCustomAngles(self, endEffPos, endEffOrientation, jointAngles):
+    def calcJacobianCustomAngles(self, endEffPos, endEffOrientation=None, jointAngles={}):
         
         Jpos = np.zeros((3,len(jointAngles)))
         Jvec = np.zeros((3,len(jointAngles)))
@@ -265,24 +260,29 @@ class Simulation(Simulation_base):
             jointAxis = np.squeeze(jointRotationMatrix @ self.jointRotationAxis[currJoint])
 
             Jpos[:,i] = np.cross(jointAxis, (endEffPos - jointPos))
-            Jvec[:, i] = np.cross(jointAxis, endEffOrientation)
+            if endEffOrientation:
+                Jvec[:, i] = np.cross(jointAxis, endEffOrientation)
 
             i += 1
 
-        return np.vstack((Jpos, Jvec))
-
+        if endEffOrientation:
+            return np.vstack((Jpos, Jvec))
+        else:
+            return Jpos
 
     def getRelevantJoints(self, endEffector):
         reversedChain = []
         
-        currJoint = self.jointParents[endEffector]
-        
+        if endEffector in ['LHAND', 'RHAND']:
+            currJoint = self.jointParents[endEffector]
+        else:
+            currJoint = endEffector
+
         while currJoint != 'base_to_waist':
             reversedChain.append(currJoint)
             currJoint = self.jointParents[currJoint]
         
         reversedChain.reverse()
-
         return reversedChain
 
     def getJointAngles(self, jointNames):
@@ -317,7 +317,7 @@ class Simulation(Simulation_base):
             numSteps = 100
 
         start_pos, start_orientation = self.getJointLocationAndOrientation(endEffector)
-
+        # print(start_pos)
         xRefs = np.zeros((len(relevantJoints),numSteps))
 
         xRefs[:, 0] = self.getJointAngles(relevantJoints)
@@ -325,14 +325,59 @@ class Simulation(Simulation_base):
         for i in range(1,numSteps):
             thetasDict = { jointName:jointAngle for (jointName, jointAngle) in zip(relevantJoints, xRefs[:, i-1])}
             currEndEffPos, currEndEffectorRotationMatrix = self.getJointLocationAndOrientation(endEffector, thetasDict)
+            print(currEndEffPos)
+            currJacobian = self.calcJacobianCustomAngles(currEndEffPos, jointAngles=thetasDict)
+            nextPosition = start_pos + (i/numSteps)*(targetPosition - start_pos)
 
-            currJacobian = self.calcJacobianCustomAngles(currEndEffPos, currEndEffectorRotationMatrix @ self.refVector, thetasDict)
-            nextPosition, nextOrientation = start_pos + (i/numSteps)*(targetPosition - start_pos), start_orientation + (i/numSteps)*(orientation - start_orientation)
-            xRefs[:, i] = xRefs[:, i-1] + np.linalg.pinv(currJacobian) @ ((np.hstack(nextPosition, nextOrientation)) - np.hstack((currEndEffPos,currEndEffectorRotationMatrix @ self.refVector)))
+            if orientation:
+                nextOrientation = start_orientation + (i/numSteps)*(orientation - start_orientation)
+                xRefs[:, i] = xRefs[:, i-1] + np.linalg.pinv(currJacobian) @ ((np.hstack(nextPosition, nextOrientation)) - np.hstack((currEndEffPos,currEndEffectorRotationMatrix @ self.refVector)))
+            else:
+                xRefs[:, i] = xRefs[:, i-1] + np.linalg.pinv(currJacobian[:3]) @ np.squeeze(nextPosition - currEndEffPos)
         # TODO add your code here
         # Hint: return a numpy array which includes the reference angular
         # positions for all joints after performing inverse kinematics.
         return xRefs
+
+
+
+    # def move_without_PD(self, endEffector, targetPosition, speed=0.01, orientation=None,
+    #     threshold=1e-3, maxIter=3000, debug=False, verbose=False):
+
+    #     relevantJoints = self.getRelevantJoints(endEffector)
+    #     print(relevantJoints)
+    #     start_pos = self.getJointPosition(endEffector)
+
+    #     numSteps = int(np.linalg.norm(targetPosition-start_pos)//speed)
+    #     numSteps = min(numSteps, maxIter)
+    #     # print(numSteps)
+    #     xRefs = np.zeros((len(relevantJoints),numSteps))
+
+    #     xRefs[:, 0] = self.getJointAngles(relevantJoints)
+
+    #     pltTime = []
+    #     pltDistance = []
+
+
+    #     for i in range(1,numSteps):
+    #         currEndEffPos = self.getJointPosition(endEffector)
+
+    #         pltTime.append(i)
+    #         pltDistance.append(currEndEffPos - start_pos)
+    #         print(currEndEffPos)
+    #         currJacobian = self.jacobianMatrix(endEffector)
+    #         nextPosition = start_pos + (i/numSteps)*(targetPosition - start_pos)
+            
+    #         xRefs[:, i] = xRefs[:, i-1] + np.linalg.pinv(currJacobian[:3]) @ np.squeeze(nextPosition - currEndEffPos)
+    #         for jointName,angle in zip(relevantJoints,xRefs[:, i]):
+    #             self.p.resetJointState(
+    #                 self.robot, self.jointIds[jointName], angle)
+    #         sleep(0.1)
+        
+        
+    #     self.inverseKinematics(endEffector, targetPosition, orientation, {"steps": numSteps})     
+
+    #     return pltTime, pltDistance
 
     def move_without_PD(self, endEffector, targetPosition, speed=0.01, orientation=None,
         threshold=1e-3, maxIter=3000, debug=False, verbose=False):
@@ -347,11 +392,12 @@ class Simulation(Simulation_base):
         relevantJoints = self.getRelevantJoints(endEffector)
 
         start_pos = self.getJointPosition(endEffector)
-        print(targetPosition)
-        print(start_pos)
-        numSteps = (targetPosition-start_pos)/speed
+        
+        # print(targetPosition)
+        # print(start_pos)
+        numSteps = int(np.linalg.norm(targetPosition-start_pos)//speed)
         numSteps = min(numSteps, maxIter)
-
+        # print(numSteps)
         jointSteps = self.inverseKinematics(endEffector, targetPosition, orientation, {"steps": numSteps})
 
         pltTime = []
@@ -366,6 +412,7 @@ class Simulation(Simulation_base):
             currEndEffPos = self.getJointPosition(endEffector)
             pltTime.append(i)
             pltDistance.append(currEndEffPos - start_pos)
+            sleep(0.1)
 
         return pltTime, pltDistance
 
