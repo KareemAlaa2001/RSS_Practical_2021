@@ -318,14 +318,14 @@ class Simulation(Simulation_base):
 
         start_pos, start_orientation = self.getJointLocationAndOrientation(endEffector)
         # print(start_pos)
-        xRefs = np.zeros((len(relevantJoints),numSteps))
+        xRefs = np.zeros((len(relevantJoints),numSteps+1))
 
         xRefs[:, 0] = self.getJointAngles(relevantJoints)
 
-        for i in range(1,numSteps):
+        for i in range(1,numSteps+1):
             thetasDict = { jointName:jointAngle for (jointName, jointAngle) in zip(relevantJoints, xRefs[:, i-1])}
             currEndEffPos, currEndEffectorRotationMatrix = self.getJointLocationAndOrientation(endEffector, thetasDict)
-            print(currEndEffPos)
+            # print(currEndEffPos)
             currJacobian = self.calcJacobianCustomAngles(currEndEffPos, jointAngles=thetasDict)
             nextPosition = start_pos + (i/numSteps)*(targetPosition - start_pos)
 
@@ -334,50 +334,11 @@ class Simulation(Simulation_base):
                 xRefs[:, i] = xRefs[:, i-1] + np.linalg.pinv(currJacobian) @ ((np.hstack(nextPosition, nextOrientation)) - np.hstack((currEndEffPos,currEndEffectorRotationMatrix @ self.refVector)))
             else:
                 xRefs[:, i] = xRefs[:, i-1] + np.linalg.pinv(currJacobian[:3]) @ np.squeeze(nextPosition - currEndEffPos)
-        # TODO add your code here
-        # Hint: return a numpy array which includes the reference angular
-        # positions for all joints after performing inverse kinematics.
+        
+        thetasDict = { jointName:jointAngle for (jointName, jointAngle) in zip(relevantJoints, xRefs[:, -1])}
+        currEndEffPos, currEndEffectorRotationMatrix = self.getJointLocationAndOrientation(endEffector, thetasDict)
+        
         return xRefs
-
-
-
-    # def move_without_PD(self, endEffector, targetPosition, speed=0.01, orientation=None,
-    #     threshold=1e-3, maxIter=3000, debug=False, verbose=False):
-
-    #     relevantJoints = self.getRelevantJoints(endEffector)
-    #     print(relevantJoints)
-    #     start_pos = self.getJointPosition(endEffector)
-
-    #     numSteps = int(np.linalg.norm(targetPosition-start_pos)//speed)
-    #     numSteps = min(numSteps, maxIter)
-    #     # print(numSteps)
-    #     xRefs = np.zeros((len(relevantJoints),numSteps))
-
-    #     xRefs[:, 0] = self.getJointAngles(relevantJoints)
-
-    #     pltTime = []
-    #     pltDistance = []
-
-
-    #     for i in range(1,numSteps):
-    #         currEndEffPos = self.getJointPosition(endEffector)
-
-    #         pltTime.append(i)
-    #         pltDistance.append(currEndEffPos - start_pos)
-    #         print(currEndEffPos)
-    #         currJacobian = self.jacobianMatrix(endEffector)
-    #         nextPosition = start_pos + (i/numSteps)*(targetPosition - start_pos)
-            
-    #         xRefs[:, i] = xRefs[:, i-1] + np.linalg.pinv(currJacobian[:3]) @ np.squeeze(nextPosition - currEndEffPos)
-    #         for jointName,angle in zip(relevantJoints,xRefs[:, i]):
-    #             self.p.resetJointState(
-    #                 self.robot, self.jointIds[jointName], angle)
-    #         sleep(0.1)
-        
-        
-    #     self.inverseKinematics(endEffector, targetPosition, orientation, {"steps": numSteps})     
-
-    #     return pltTime, pltDistance
 
     def move_without_PD(self, endEffector, targetPosition, speed=0.01, orientation=None,
         threshold=1e-3, maxIter=3000, debug=False, verbose=False):
@@ -387,8 +348,6 @@ class Simulation(Simulation_base):
         Return:
             pltTime, pltDistance arrays used for plotting
         """
-        #TODO add your code here
-        # iterate through joints and update joint states based on IK solver
         relevantJoints = self.getRelevantJoints(endEffector)
 
         start_pos = self.getJointPosition(endEffector)
@@ -411,7 +370,7 @@ class Simulation(Simulation_base):
 
             currEndEffPos = self.getJointPosition(endEffector)
             pltTime.append(i)
-            pltDistance.append(currEndEffPos - start_pos)
+            pltDistance.append(np.linalg.norm(currEndEffPos - start_pos))
             sleep(0.1)
 
         return pltTime, pltDistance
