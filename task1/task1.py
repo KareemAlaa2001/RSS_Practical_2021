@@ -11,6 +11,7 @@ abs_path = os.path.dirname(os.path.realpath(__file__))
 root_path = abs_path + '/..'
 core_path = root_path + '/core'
 sys.path.append(core_path)
+
 from Pybullet_Simulation import Simulation
 
 # specific settings for this task
