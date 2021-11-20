@@ -512,7 +512,7 @@ class Simulation(Simulation_base):
         return kp*(x_ref - x_real) + ki*integral + kd*(dx_ref - dx_real)
 
     # Task 2.2 Joint Manipulation
-    def moveJoint(self, joint, targetPosition, targetVelocity, verbose=False):
+    def moveJoint(self, joint, targetPosition, targetVelocity, verbose=False, numSeconds=10):
         """ This method moves a joint with your PD controller. \\
         Arguments: \\
             joint - the name of the joint \\
@@ -551,10 +551,9 @@ class Simulation(Simulation_base):
         # logging for the graph
         pltTime, pltTarget, pltTorque, pltTorqueTime, pltPosition, pltVelocity = [], [], [], [], [], []
         
-        movementConverged = False
-        i = 0
         disableIntegralValue = 0
-        while not movementConverged:
+
+        for i in range(numSeconds//self.dt):
             currentPosition = self.getJointPos(joint)
             print(currentPosition)
             pltPosition.append(currentPosition)
@@ -567,14 +566,8 @@ class Simulation(Simulation_base):
                 currentVelocity = (currentPosition - pltPosition[i-1])/self.dt
 
             pltVelocity.append(currentVelocity)
-            
-            if currentPosition == targetPosition:
-                movementConverged = True
-                break
-            
             pltTorqueTime.append(i*self.dt)
             toy_tick(targetPosition, currentPosition, targetVelocity, currentVelocity, disableIntegralValue)
-            i += 1
 
 
         return pltTime, pltTarget, pltTorque, pltTorqueTime, pltPosition, pltVelocity
