@@ -350,44 +350,6 @@ class Simulation(Simulation_base):
         self.currTrajectory['relevantJoints'] = relevantJoints
         return xRefs
 
-    # NOTE THIS implementation calculates the next position on the go during the update, will keep this around
-    # def inverseKinematics(self, endEffector, targetPosition, orientation, frame=None):
-    #     """Your IK solver \\
-    #     Arguments: \\
-    #         endEffector: the jointName the end-effector \\
-    #         targetPosition: final destination the the end-effector \\
-    #         orientation: the desired orientation of the end-effector
-    #                     together with its parent link \\
-    #     Keywork Arguments: \\
-    #         speed: how fast the end-effector should move (m/s) \\
-    #         orientation: the desired orientation \\
-    #         compensationRatio: naive gravity compensation ratio \\
-    #         debugLine: optional \\
-    #         verbose: optional \\
-    #     Return: \\
-    #         Vector of x_refs
-    #     """
-
-    #     assert "relevantJoints" in frame
-
-    #     relevantJoints = frame.get('relevantJoints')
-
-    #     start_pos, start_orientation = self.getJointLocationAndOrientation(endEffector)
-        
-    #     xRefDeltas = np.zeros(len(relevantJoints))
-        
-    #     # print(currEndEffPos)
-    #     currJacobian = self.jacobianMatrix(endEffector, relevantJoints)
-
-    #     if np.any(orientation):
-    #         xRefDeltas = np.linalg.pinv(currJacobian) @ ((np.hstack((targetPosition, orientation))) - np.hstack((start_pos,start_orientation @ self.refVector)))
-    #     else:
-    #         xRefDeltas = np.linalg.pinv(currJacobian[:3]) @ np.squeeze(targetPosition - start_pos)
-        
-    #     xRefs = np.array(self.getJointAngles(relevantJoints)) + xRefDeltas
-        
-    #     return xRefs
-
     # NOTE keep this function until the end, this has an implementation where IK calculates the whole trajectory first THEN move_without_pd updates each step
     def move_without_PD(self, endEffector, targetPosition, speed=0.01, orientation=None,
         threshold=1e-3, maxIter=3000, debug=False, verbose=False):
@@ -425,51 +387,6 @@ class Simulation(Simulation_base):
 
         return pltTime, pltDistance
 
-    
-    # NOTE reimplementing this with trajectory planning in move_without_pd and 1 step movement in inverseKinematics
-    # def move_without_PD(self, endEffector, targetPosition, speed=0.01, orientation=None,
-    #     threshold=1e-3, maxIter=3000, debug=False, verbose=False):
-    #     """
-    #     Move joints using Inverse Kinematics solver (without using PD control).
-    #     This method should update joint states directly.
-    #     Return:
-    #         pltTime, pltDistance arrays used for plotting
-    #     """
-    #     relevantJoints = self.getRelevantJoints(endEffector)
-
-    #     start_pos = self.getJointPosition(endEffector)
-
-    #     # print(targetPosition)
-    #     # print(start_pos)
-    #     numSteps = int(np.linalg.norm(targetPosition-start_pos)//speed)
-    #     numSteps = min(numSteps, maxIter)
-    #     # print(numSteps)
-
-    #     endEffPositionTrajectory = np.linspace(start_pos, targetPosition, numSteps)
-
-    #     if np.any(orientation):
-    #         startOrientation = self.getJointOrientation(endEffector)
-    #         endEffOrientationTrajectory = np.linspace(startOrientation, orientation, numSteps)
-
-    #     # jointSteps = self.inverseKinematics(endEffector, targetPosition, orientation, {"relevantJoints": relevantJoints})
-
-    #     pltTime = []pltPosition
-    #         if np.any(orientation):
-    #             nextOrientation = endEffOrientationTrajectory[i]
-    #         else:
-    #             nextOrientation = None
-            
-    #         newXRefs = self.inverseKinematics(endEffector, nextPosition, nextOrientation, {"relevantJoints": relevantJoints})
-
-    #         for jointName,angle in zip(relevantJoints,newXRefs):
-    #             self.p.resetJointState(
-    #                 self.robot, self.jointIds[jointName], angle)
-
-    #         pltTime.append(i)
-    #         pltDistance.append(np.linalg.norm(nextPosition - start_pos))
-    #         self.tick_without_PD(relevantJoints, newXRefs)
-
-    #     return pltTime, pltDistance
 
     def tick_without_PD(self, relevantJoints=None, jointPositions=None):
         """Ticks one step of simulation without PD control. """
@@ -545,6 +462,8 @@ class Simulation(Simulation_base):
 
         targetPosition, targetVelocity = float(targetPosition), float(targetVelocity)
 
+        startPosition = self.getJointPos(joint)
+        # xRefs = np.linspace(startPosition,targetPosition, int(numSeconds/self.dt))
         # disable joint velocity controller before apply a torque
         self.disableVelocityController(joint)
         # logging for the graph
@@ -583,28 +502,52 @@ class Simulation(Simulation_base):
 
         relevantJoints = self.getRelevantJoints(endEffector)
 
-        start_pos = self.getJointPosition(endEffector)
+        start_pos = self.getJointPosition(endEffector).squeeze()
         
         # print(targetPosition)
         # print(start_pos)
-        numSteps = int(np.linalg.norm(targetPosition-start_pos)/speed)
+        
+        numSteps = self.calIterToTarget(start_pos,targetPosition, speed)
         numSteps = min(numSteps, maxIter)
         # print(numSteps)
-        jointSteps = self.inverseKinematics(endEffector, targetPosition, orientation, {"steps": numSteps})
+        jointRefs = self.inverseKinematics(endEffector, targetPosition, orientation, {"steps": numSteps, "relevantJoints": relevantJoints})
+        
+        jointPrevPositions = {jointName:jointPos for jointName,jointPos in zip(relevantJoints, self.getJointAngles(relevantJoints)) }
 
         pltTime = []
         pltDistance = []
-        for i in range(jointSteps.shape[1]):
-            jointConfigs = jointSteps[:,i]
+        for i in range(jointRefs.shape[1]):
+            jointConfigs = jointRefs[:,i]
 
             for jointName,angle in zip(relevantJoints,jointConfigs):
-                self.p.resetJointState(
-                    self.robot, self.jointIds[jointName], angle)
-
+                self.jointTargetPos[jointName] = angle
+            
             currEndEffPos = self.getJointPosition(endEffector)
+            print(currEndEffPos)
+
+            positionsBeforeTick = {jointName:jointPos for jointName,jointPos in zip(relevantJoints, self.getJointAngles(relevantJoints)) }
+            
+            self.tick(jointPrevPositions)
+            jointPrevPositions = positionsBeforeTick
+            
             pltTime.append(i*self.dt)
             pltDistance.append(np.linalg.norm(currEndEffPos - start_pos))
-            self.tick_without_PD(relevantJoints, jointConfigs)
+
+        # for i in range(int(numSeconds/self.dt)):
+        #     currentPosition = self.getJointPos(joint)
+        #     print(currentPosition)
+        #     pltPosition.append(currentPosition)
+        #     pltTime.append(i*self.dt)
+        #     pltTarget.append(targetPosition)
+
+        #     if i == 0:
+        #         currentVelocity = 0
+        #     else:
+        #         currentVelocity = (currentPosition - pltPosition[i-1])/self.dt
+
+        #     pltVelocity.append(currentVelocity)
+        #     pltTorqueTime.append(i*self.dt)
+        #     toy_tick(targetPosition, currentPosition, targetVelocity, currentVelocity, disableIntegralValue)
 
         return pltTime, pltDistance
         
@@ -617,11 +560,11 @@ class Simulation(Simulation_base):
         # all IK iterations (optional).
 
         #return pltTime, pltDistance
-        pass
 
     def tick(self, jointPrevPositions=None):
         """Ticks one step of simulation using PD control."""
         # Iterate through all joints and update joint states using PD control.
+
         for joint in self.joints:
             # skip dummy joints (world to base joint)
             jointController = self.jointControllers[joint]
@@ -638,8 +581,9 @@ class Simulation(Simulation_base):
 
             ### Implement your code from here ... ###
             # TODO: obtain torque from PD controller
-            currVelocity = (self.getJointPos(joint) - jointPrevPositions[joint])/ self.dt
-            torque = self.calculateTorque(self.jointTargetPos[joint],self.getJointPos(joint), 0.0, currVelocity, 0, kp, ki, kd)
+            jointPosition = self.getJointPos(joint)
+            currVelocity = (jointPosition - jointPrevPositions.get(joint, jointPosition))/ self.dt
+            torque = self.calculateTorque(self.jointTargetPos[joint],jointPosition, 0.0, currVelocity, 0, kp, ki, kd)
             ### ... to here ###
 
             self.p.setJointMotorControl2(
