@@ -512,7 +512,7 @@ class Simulation(Simulation_base):
         return kp*(x_ref - x_real) + ki*integral + kd*(dx_ref - dx_real)
 
     # Task 2.2 Joint Manipulation
-    def moveJoint(self, joint, targetPosition, targetVelocity, verbose=False, numSeconds=10):
+    def moveJoint(self, joint, targetPosition, targetVelocity, verbose=False, numSeconds=1):
         """ This method moves a joint with your PD controller. \\
         Arguments: \\
             joint - the name of the joint \\
@@ -553,7 +553,7 @@ class Simulation(Simulation_base):
         
         disableIntegralValue = 0
 
-        for i in range(numSeconds//self.dt):
+        for i in range(int(numSeconds/self.dt)):
             currentPosition = self.getJointPos(joint)
             print(currentPosition)
             pltPosition.append(currentPosition)
