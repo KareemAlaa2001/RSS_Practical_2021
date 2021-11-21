@@ -192,8 +192,8 @@ class Simulation(Simulation_base):
         # print(transformationMatrices)
         # print("got trans matrixes")
         if jointName in ['base_to_dummy','base_to_waist']:
-            return np.array([0,0,0]), np.identity(3)
-        
+            raise Exception("Shouldn't be calling this for dummy joints!")
+
         fkMatrix = transformationMatrices[jointName]
         currJoint = self.jointParents[jointName]
         # print("initialised fkmatrixs")
@@ -266,12 +266,12 @@ class Simulation(Simulation_base):
             jointAxis = np.squeeze(jointRotationMatrix @ self.jointRotationAxis[currJoint])
 
             Jpos[:,i] = np.cross(jointAxis, (endEffPos - jointPos))
-            if endEffOrientation:
+            if np.any(endEffOrientation):
                 Jvec[:, i] = np.cross(jointAxis, endEffOrientation)
 
             i += 1
 
-        if endEffOrientation:
+        if np.any(endEffOrientation):
             return np.vstack((Jpos, Jvec))
         else:
             return Jpos
@@ -298,6 +298,59 @@ class Simulation(Simulation_base):
 
     # IK for calculating trajectory first THEN moving, NOTE keep this
     # # NOTE documented "Keywork" arguments will just be kept in frame and ignored for now 
+    def inverseKinematics(self, endEffector, targetPosition, orientation, frame=None):
+        """Your IK solver \\
+        Arguments: \\
+            endEffector: the jointName the end-effector \\
+            targetPosition: final destination the the end-effector \\
+            orientation: the desired orientation of the end-effector
+                        together with its parent link \\
+        Keywork Arguments: \\
+            speed: how fast the end-effector should move (m/s) \\
+            orientation: the desired orientation \\
+            compensationRatio: naive gravity compensation ratio \\
+            debugLine: optional \\
+            verbose: optional \\
+        Return: \\
+            Vector of x_refs
+        """
+        assert "relevantJoints" in frame, "relevantJoints missing from frame in IK function call"
+        assert "steps" in frame, "steps missing from frame in IK function call"
+        
+        relevantJoints = frame['relevantJoints']
+        numSteps = frame['steps']
+
+
+        start_pos = self.getJointPosition(endEffector)
+        start_orientation = self.getJointOrientation(endEffector)
+        # print(start_pos)
+        xRefs = np.zeros((len(relevantJoints),numSteps+1))
+
+        xRefs[:, 0] = self.getJointAngles(relevantJoints)
+
+        for i in range(1,numSteps+1):
+            thetasDict = { jointName:jointAngle for (jointName, jointAngle) in zip(relevantJoints, xRefs[:, i-1])}
+            currEndEffPos, currEndEffectorRotationMatrix = self.getJointLocationAndOrientation(endEffector, thetasDict)
+            # print(currEndEffPos)
+            currOrientation = np.squeeze(currEndEffectorRotationMatrix @ self.refVector)
+            # print(currEndEffPos)
+            currJacobian = self.calcJacobianCustomAngles(currEndEffPos, endEffOrientation=currOrientation, jointAngles=thetasDict)
+            nextPosition = start_pos + (i/numSteps)*(targetPosition - start_pos)
+
+            if np.any(orientation):
+                nextOrientation = start_orientation + (i/numSteps)*(orientation - start_orientation)
+                posOrientationDelta = ((np.hstack((np.squeeze(nextPosition), nextOrientation))) - np.hstack((np.squeeze(currEndEffPos),currOrientation)))
+                xRefDeltas = np.linalg.pinv(currJacobian) @ posOrientationDelta
+                xRefs[:, i] = xRefs[:, i-1] + xRefDeltas
+            else:
+                xRefs[:, i] = xRefs[:, i-1] + np.linalg.pinv(currJacobian[:3]) @ np.squeeze(nextPosition - currEndEffPos)
+        
+        self.currTrajectory['xRefs'] = xRefs
+        self.currTrajectory['currStep'] = 0
+        self.currTrajectory['relevantJoints'] = relevantJoints
+        return xRefs
+
+    # NOTE THIS implementation calculates the next position on the go during the update, will keep this around
     # def inverseKinematics(self, endEffector, targetPosition, orientation, frame=None):
     #     """Your IK solver \\
     #     Arguments: \\
@@ -315,77 +368,65 @@ class Simulation(Simulation_base):
     #         Vector of x_refs
     #     """
 
-    #     relevantJoints = self.getRelevantJoints(endEffector)
+    #     assert "relevantJoints" in frame
 
-    #     numSteps = 0
-    #     if "steps" in frame:
-    #         numSteps = frame["steps"]
-    #     else:
-    #         numSteps = 100
+    #     relevantJoints = frame.get('relevantJoints')
 
     #     start_pos, start_orientation = self.getJointLocationAndOrientation(endEffector)
-    #     # print(start_pos)
-    #     xRefs = np.zeros((len(relevantJoints),numSteps+1))
-
-    #     xRefs[:, 0] = self.getJointAngles(relevantJoints)
-
-    #     for i in range(1,numSteps+1):
-    #         thetasDict = { jointName:jointAngle for (jointName, jointAngle) in zip(relevantJoints, xRefs[:, i-1])}
-    #         currEndEffPos, currEndEffectorRotationMatrix = self.getJointLocationAndOrientation(endEffector, thetasDict)
-    #         # print(currEndEffPos)
-    #         currJacobian = self.calcJacobianCustomAngles(currEndEffPos, jointAngles=thetasDict)
-    #         nextPosition = start_pos + (i/numSteps)*(targetPosition - start_pos)
-
-    #         if orientation:
-    #             nextOrientation = start_orientation + (i/numSteps)*(orientation - start_orientation)
-    #             xRefs[:, i] = xRefs[:, i-1] + np.linalg.pinv(currJacobian) @ ((np.hstack(nextPosition, nextOrientation)) - np.hstack((currEndEffPos,currEndEffectorRotationMatrix @ self.refVector)))
-    #         else:
-    #             xRefs[:, i] = xRefs[:, i-1] + np.linalg.pinv(currJacobian[:3]) @ np.squeeze(nextPosition - currEndEffPos)
         
-    #     self.currTrajectory['xRefs'] = xRefs
-    #     self.currTrajectory['currStep'] = 0
-    #     self.currTrajectory['relevantJoints'] = relevantJoints
+    #     xRefDeltas = np.zeros(len(relevantJoints))
+        
+    #     # print(currEndEffPos)
+    #     currJacobian = self.jacobianMatrix(endEffector, relevantJoints)
+
+    #     if np.any(orientation):
+    #         xRefDeltas = np.linalg.pinv(currJacobian) @ ((np.hstack((targetPosition, orientation))) - np.hstack((start_pos,start_orientation @ self.refVector)))
+    #     else:
+    #         xRefDeltas = np.linalg.pinv(currJacobian[:3]) @ np.squeeze(targetPosition - start_pos)
+        
+    #     xRefs = np.array(self.getJointAngles(relevantJoints)) + xRefDeltas
+        
     #     return xRefs
 
-    # NOTE THIS implementation calculates the next position on the go during the update, will keep this around
-    def inverseKinematics(self, endEffector, targetPosition, orientation, frame=None):
-        """Your IK solver \\
-        Arguments: \\
-            endEffector: the jointName the end-effector \\
-            targetPosition: final destination the the end-effector \\
-            orientation: the desired orientation of the end-effector
-                        together with its parent link \\
-        Keywork Arguments: \\
-            speed: how fast the end-effector should move (m/s) \\
-            orientation: the desired orientation \\
-            compensationRatio: naive gravity compensation ratio \\
-            debugLine: optional \\
-            verbose: optional \\
-        Return: \\
-            Vector of x_refs
-        """
-
-        assert "relevantJoints" in frame
-
-        relevantJoints = frame.get('relevantJoints')
-
-        start_pos, start_orientation = self.getJointLocationAndOrientation(endEffector)
-        
-        xRefDeltas = np.zeros(len(relevantJoints))
-        
-        # print(currEndEffPos)
-        currJacobian = self.jacobianMatrix(endEffector, relevantJoints)
-
-        if np.any(orientation):
-            xRefDeltas = np.linalg.pinv(currJacobian) @ ((np.hstack((targetPosition, orientation))) - np.hstack((start_pos,start_orientation @ self.refVector)))
-        else:
-            xRefDeltas = np.linalg.pinv(currJacobian[:3]) @ np.squeeze(targetPosition - start_pos)
-        
-        xRefs = np.array(self.getJointAngles(relevantJoints)) + xRefDeltas
-        
-        return xRefs
-
     # NOTE keep this function until the end, this has an implementation where IK calculates the whole trajectory first THEN move_without_pd updates each step
+    def move_without_PD(self, endEffector, targetPosition, speed=0.01, orientation=None,
+        threshold=1e-3, maxIter=3000, debug=False, verbose=False):
+        """
+        Move joints using Inverse Kinematics solver (without using PD control).
+        This method should update joint states directly.
+        Return:
+            pltTime, pltDistance arrays used for plotting
+        """
+        relevantJoints = self.getRelevantJoints(endEffector)
+
+        start_pos = self.getJointPosition(endEffector).squeeze()
+        
+        # print(targetPosition)
+        # print(start_pos)
+        
+        numSteps = self.calIterToTarget(start_pos,targetPosition, speed)
+        numSteps = min(numSteps, maxIter)
+        # print(numSteps)
+        jointSteps = self.inverseKinematics(endEffector, targetPosition, orientation, {"steps": numSteps, "relevantJoints": relevantJoints})
+
+        pltTime = []
+        pltDistance = []
+        for i in range(jointSteps.shape[1]):
+            jointConfigs = jointSteps[:,i]
+
+            for jointName,angle in zip(relevantJoints,jointConfigs):
+                self.p.resetJointState(
+                    self.robot, self.jointIds[jointName], angle)
+
+            currEndEffPos = self.getJointPosition(endEffector)
+            pltTime.append(i*self.dt)
+            pltDistance.append(np.linalg.norm(currEndEffPos - start_pos))
+            self.tick_without_PD(relevantJoints, jointConfigs)
+
+        return pltTime, pltDistance
+
+    
+    # NOTE reimplementing this with trajectory planning in move_without_pd and 1 step movement in inverseKinematics
     # def move_without_PD(self, endEffector, targetPosition, speed=0.01, orientation=None,
     #     threshold=1e-3, maxIter=3000, debug=False, verbose=False):
     #     """
@@ -397,80 +438,38 @@ class Simulation(Simulation_base):
     #     relevantJoints = self.getRelevantJoints(endEffector)
 
     #     start_pos = self.getJointPosition(endEffector)
-        
+
     #     # print(targetPosition)
     #     # print(start_pos)
     #     numSteps = int(np.linalg.norm(targetPosition-start_pos)//speed)
     #     numSteps = min(numSteps, maxIter)
     #     # print(numSteps)
-    #     jointSteps = self.inverseKinematics(endEffector, targetPosition, orientation, {"steps": numSteps})
 
-    #     pltTime = []
-    #     pltDistance = []
-    #     for i in range(jointSteps.shape[1]):
-    #         jointConfigs = jointSteps[:,i]
+    #     endEffPositionTrajectory = np.linspace(start_pos, targetPosition, numSteps)
 
-    #         for jointName,angle in zip(relevantJoints,jointConfigs):
+    #     if np.any(orientation):
+    #         startOrientation = self.getJointOrientation(endEffector)
+    #         endEffOrientationTrajectory = np.linspace(startOrientation, orientation, numSteps)
+
+    #     # jointSteps = self.inverseKinematics(endEffector, targetPosition, orientation, {"relevantJoints": relevantJoints})
+
+    #     pltTime = []pltPosition
+    #         if np.any(orientation):
+    #             nextOrientation = endEffOrientationTrajectory[i]
+    #         else:
+    #             nextOrientation = None
+            
+    #         newXRefs = self.inverseKinematics(endEffector, nextPosition, nextOrientation, {"relevantJoints": relevantJoints})
+
+    #         for jointName,angle in zip(relevantJoints,newXRefs):
     #             self.p.resetJointState(
     #                 self.robot, self.jointIds[jointName], angle)
 
-    #         currEndEffPos = self.getJointPosition(endEffector)
     #         pltTime.append(i)
-    #         pltDistance.append(np.linalg.norm(currEndEffPos - start_pos))
-    #         sleep(0.1)
+    #         pltDistance.append(np.linalg.norm(nextPosition - start_pos))
+    #         self.tick_without_PD(relevantJoints, newXRefs)
 
     #     return pltTime, pltDistance
-
-    
-    # NOTE reimplementing this with trajectory planning in move_without_pd and 1 step movement in inverseKinematics
-    def move_without_PD(self, endEffector, targetPosition, speed=0.01, orientation=None,
-        threshold=1e-3, maxIter=3000, debug=False, verbose=False):
-        """
-        Move joints using Inverse Kinematics solver (without using PD control).
-        This method should update joint states directly.
-        Return:
-            pltTime, pltDistance arrays used for plotting
-        """
-        relevantJoints = self.getRelevantJoints(endEffector)
-
-        start_pos = self.getJointPosition(endEffector)
-
-        # print(targetPosition)
-        # print(start_pos)
-        numSteps = int(np.linalg.norm(targetPosition-start_pos)//speed)
-        numSteps = min(numSteps, maxIter)
-        # print(numSteps)
-
-        endEffPositionTrajectory = np.linspace(start_pos, targetPosition, numSteps)
-
-        if np.any(orientation):
-            startOrientation = self.getJointOrientation(endEffector)
-            endEffOrientationTrajectory = np.linspace(startOrientation, orientation, numSteps)
-
-        # jointSteps = self.inverseKinematics(endEffector, targetPosition, orientation, {"relevantJoints": relevantJoints})
-
-        pltTime = []
-        pltDistance = []
-        for i in range(1,numSteps):
-            
-            nextPosition = endEffPositionTrajectory[i]
-
-            if np.any(orientation):
-                nextOrientation = endEffOrientationTrajectory[i]
-            else:
-                nextOrientation = None
-            
-            newXRefs = self.inverseKinematics(endEffector, nextPosition, nextOrientation, {"relevantJoints": relevantJoints})
-
-            for jointName,angle in zip(relevantJoints,newXRefs):
-                self.p.resetJointState(
-                    self.robot, self.jointIds[jointName], angle)
-
-            pltTime.append(i)
-            pltDistance.append(np.linalg.norm(nextPosition - start_pos))
-            self.tick_without_PD(relevantJoints, newXRefs)
-
-        return pltTime, pltDistance
 
     def tick_without_PD(self, relevantJoints=None, jointPositions=None):
         """Ticks one step of simulation without PD control. """
@@ -512,7 +511,7 @@ class Simulation(Simulation_base):
         return kp*(x_ref - x_real) + ki*integral + kd*(dx_ref - dx_real)
 
     # Task 2.2 Joint Manipulation
-    def moveJoint(self, joint, targetPosition, targetVelocity, verbose=False, numSeconds=1):
+    def moveJoint(self, joint, targetPosition, targetVelocity, verbose=False, numSeconds=2):
         """ This method moves a joint with your PD controller. \\
         Arguments: \\
             joint - the name of the joint \\
@@ -581,6 +580,34 @@ class Simulation(Simulation_base):
             pltTime, pltDistance arrays used for plotting
         """
         #TODO add your code here
+
+        relevantJoints = self.getRelevantJoints(endEffector)
+
+        start_pos = self.getJointPosition(endEffector)
+        
+        # print(targetPosition)
+        # print(start_pos)
+        numSteps = int(np.linalg.norm(targetPosition-start_pos)/speed)
+        numSteps = min(numSteps, maxIter)
+        # print(numSteps)
+        jointSteps = self.inverseKinematics(endEffector, targetPosition, orientation, {"steps": numSteps})
+
+        pltTime = []
+        pltDistance = []
+        for i in range(jointSteps.shape[1]):
+            jointConfigs = jointSteps[:,i]
+
+            for jointName,angle in zip(relevantJoints,jointConfigs):
+                self.p.resetJointState(
+                    self.robot, self.jointIds[jointName], angle)
+
+            currEndEffPos = self.getJointPosition(endEffector)
+            pltTime.append(i*self.dt)
+            pltDistance.append(np.linalg.norm(currEndEffPos - start_pos))
+            self.tick_without_PD(relevantJoints, jointConfigs)
+
+        return pltTime, pltDistance
+        
         # Iterate through joints and use states from IK solver as reference states in PD controller.
         # Perform iterations to track reference states using PD controller until reaching
         # max iterations or position threshold.
@@ -592,7 +619,7 @@ class Simulation(Simulation_base):
         #return pltTime, pltDistance
         pass
 
-    def tick(self):
+    def tick(self, jointPrevPositions=None):
         """Ticks one step of simulation using PD control."""
         # Iterate through all joints and update joint states using PD control.
         for joint in self.joints:
@@ -611,7 +638,8 @@ class Simulation(Simulation_base):
 
             ### Implement your code from here ... ###
             # TODO: obtain torque from PD controller
-            torque = 0.0  # TODO: fix me
+            currVelocity = (self.getJointPos(joint) - jointPrevPositions[joint])/ self.dt
+            torque = self.calculateTorque(self.jointTargetPos[joint],self.getJointPos(joint), 0.0, currVelocity, 0, kp, ki, kd)
             ### ... to here ###
 
             self.p.setJointMotorControl2(

@@ -55,7 +55,7 @@ debugLine = True
 
 # TODO: Add your code here to start simulation
 
-ref = [0, 0, 1]
+ref = [1, 0, 0]
 sim = Simulation(pybulletConfigs, robotConfigs, refVect=ref)
 
 # This is an example target position for the left end effector. This target
@@ -67,7 +67,7 @@ endEffector = "LARM_JOINT5"
 targetPosition = np.array([0.37, 0.23, 1.06385])  # x,y,z coordinates in world frame
 
 # Example code. Feel free to modify
-pltTime, pltEFPosition = sim.move_without_PD(endEffector, targetPosition, speed=0.01, orientation=None, threshold=1e-3, maxIter=3000, debug=False, verbose=False)
+pltTime, pltEFPosition = sim.move_without_PD(endEffector, targetPosition, speed=0.1, orientation=np.array([0,-1,0]), threshold=1e-3, maxIter=3000, debug=False, verbose=False)
 
 time.sleep(5)
 
