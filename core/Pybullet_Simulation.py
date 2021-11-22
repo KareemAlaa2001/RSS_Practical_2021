@@ -323,6 +323,7 @@ class Simulation(Simulation_base):
 
         start_pos = self.getJointPosition(endEffector)
         start_orientation = self.getJointOrientation(endEffector)
+        # print(start_orientation)
         # print(start_pos)
         xRefs = np.zeros((len(relevantJoints),numSteps+1))
 
@@ -339,6 +340,7 @@ class Simulation(Simulation_base):
 
             if np.any(orientation):
                 nextOrientation = start_orientation + (i/numSteps)*(orientation - start_orientation)
+                print(nextOrientation)
                 posOrientationDelta = ((np.hstack((np.squeeze(nextPosition), nextOrientation))) - np.hstack((np.squeeze(currEndEffPos),currOrientation)))
                 xRefDeltas = np.linalg.pinv(currJacobian) @ posOrientationDelta
                 xRefs[:, i] = xRefs[:, i-1] + xRefDeltas
@@ -473,7 +475,7 @@ class Simulation(Simulation_base):
 
         for i in range(int(numSeconds/self.dt)):
             currentPosition = self.getJointPos(joint)
-            print(currentPosition)
+            # print(currentPosition)
             pltPosition.append(currentPosition)
             pltTime.append(i*self.dt)
             pltTarget.append(targetPosition)
@@ -523,7 +525,7 @@ class Simulation(Simulation_base):
                 self.jointTargetPos[jointName] = angle
             
             currEndEffPos = self.getJointPosition(endEffector)
-            print(currEndEffPos)
+            # print(currEndEffPos)
 
             positionsBeforeTick = {jointName:jointPos for jointName,jointPos in zip(relevantJoints, self.getJointAngles(relevantJoints)) }
             
