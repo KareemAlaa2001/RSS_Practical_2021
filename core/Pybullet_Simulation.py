@@ -473,10 +473,6 @@ class Simulation(Simulation_base):
         
         disableIntegralValue = 0
 
-        jointsToSendZero = self.joints
-        if joint != 'CHEST_JOINT0':
-            jointsToSendZero.remove(joint)
-
         for i in range(int(numSeconds/self.dt)):
             currentPosition = self.getJointPos(joint)
             # print(currentPosition)
@@ -492,13 +488,6 @@ class Simulation(Simulation_base):
             pltVelocity.append(currentVelocity)
             pltTorqueTime.append(i*self.dt)
 
-            for j in jointsToSendZero:
-                self.p.setJointMotorControl2(
-                    bodyIndex=self.robot,
-                    jointIndex=self.jointIds[j],
-                    controlMode=self.p.TORQUE_CONTROL,
-                    force=0
-                )
             toy_tick(targetPosition, currentPosition, targetVelocity, currentVelocity, disableIntegralValue)
 
 
@@ -719,4 +708,32 @@ class Simulation(Simulation_base):
         
         return pltTime, pltDistance
 
+    # NOTE takes in the target angle in radians
+    def moveJointInConjuction(self, jointName, targetPosition, angularSpeed=0.1, maxIter=100):
+        startPosition = self.getJointPos(jointName)
+
+        numSteps = min(maxIter, self.calIterToTarget(startPosition,targetPosition, angularSpeed))
+
+        jointPositions = np.linspace(startPosition, targetPosition, numSteps)
+
+        otherJoints = self.joints
+        if jointName != 'CHEST_JOINT0':
+            otherJoints.remove(jointName)
+
+        for joint in otherJoints:
+            self.jointTargetPos[joint] = self.getJointPos(joint)
+
+        jointPrevPositions = {jointName:jointPos for jointName,jointPos in zip(self.joints, self.getJointAngles(self.joints)) }
+
+        for pos in jointPositions:
+            self.jointTargetPos[jointName] = pos
+
+            positionsBeforeTick = {jointName:jointPos for jointName,jointPos in zip(self.joints, self.getJointAngles(self.joints)) }
+
+            self.tick(jointPrevPositions)
+            jointPrevPositions = positionsBeforeTick
+
+        return
+           
+ 
  ### END
