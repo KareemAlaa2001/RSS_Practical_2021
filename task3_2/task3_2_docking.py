@@ -100,8 +100,31 @@ def getReadyForTask():
 
 
 def solution():
-    # TODO: Add your code herez
-    pass
+    # TODO: Add your code here
+    print(sim.getJointPosition('LHAND'))
+    print(sim.getJointPosition('RHAND'))
+
+    sim.moveBothHands(np.array([0.42, 0.2, 1.0]),np.array([0, -1, 0]), np.array([0.42, 0.15, 1.0]),np.array([0, 1, 0]),speed=0.1)
+    sim.moveBothHands(np.array([0.42, 0.2, 1.3]),np.array([0, -1, 0]), np.array([0.42, 0.15, 1.3]),np.array([0, 1, 0]),speed=0.1)
+
+    chest_movements = np.linspace(sim.getJointPos('CHEST_JOINT0'), np.deg2rad(45), 20)
+    
+    for pos in chest_movements:
+        sim.moveJoint('CHEST_JOINT0', pos, 0, numSeconds=0.1)
+    # sim.moveBothHands(np.array([0.42, 0.2, 1.3]),np.array([0, -1, 0]), np.array([0.42, 0.15, 1.3]),np.array([0, 1, 0]),speed=0.1)
+
+    # sim.moveBothHands(np.array([0.42, 0.2, 1.0]),np.array([0, -1, 0]), np.array([0.42, 0.15, 1.0]),np.array([0, 1, 0]),speed=0.1)
+    # sim.move_with_PD('LHAND', np.array([0.42, 0.2, 1.0]), orientation=np.array([0, -1, 0]), speed=0.1, maxIter=3000, debug=False, verbose=False)
+    # sim.move_with_PD('RHAND', np.array([0.42, 0.0, 1.0]), orientation=np.array([0, 1, 0]), speed=0.05, maxIter=3000, debug=False, verbose=False)
+    print(sim.getJointPosition('LHAND'))
+    print(sim.getJointPosition('RHAND'))
+    # sim.move_with_PD('RHAND', np.array([0.42, 0.17, 1.0]), orientation=np.array([0, 1, 0]), speed=0.05, maxIter=3000, debug=False, verbose=False)
+    # sim.move_with_PD('LHAND', np.array([0.42, 0.2, 1.0]), orientation=np.array([0, -1, 0]), speed=0.05, maxIter=3000, debug=False, verbose=False)
+    # sim.move_with_PD('RHAND', np.array([0.42, 0.18, 1.0]), orientation=np.array([0, 1, 0]), speed=0.05, maxIter=3000, debug=False, verbose=False)
+
+    # sim.move_with_PD('LHAND', np.array([0.389, 0.17, 1.0]), orientation=np.array([0, -1, 0]), speed=0.05, maxIter=3000, debug=False, verbose=False)
+
+    time.sleep(5)
 
 tableId, cubeId, targetId = getReadyForTask()
 solution()

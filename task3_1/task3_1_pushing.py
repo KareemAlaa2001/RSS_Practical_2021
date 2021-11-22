@@ -91,7 +91,16 @@ def getReadyForTask():
 
 def solution():
     # TODO: Add your code here
-    pass
+    print(sim.getJointPosition('LHAND'))
+    
+
+    sim.move_with_PD('LHAND', np.array([0.083, 0.232, 0.89]), orientation=np.array([0, -1, 0]), speed=0.1, maxIter=3000, debug=False, verbose=False)
+    sim.move_with_PD('LHAND', np.array([0.083, 0.12, 0.89]), orientation=np.array([0, -1, 0]), speed=0.1, maxIter=3000, debug=False, verbose=False)
+    sim.move_with_PD('LHAND', np.array([0.58, 0.065, 0.89]), orientation=np.array([0, -1, 0.0]), speed=0.01, maxIter=3000, debug=False, verbose=False)
+    sim.move_with_PD('LHAND', np.array([0.57, 0.1, 1.0]), orientation=np.array([0, -1, 0.0]), speed=0.1, maxIter=3000, debug=False, verbose=False)
+
+    print("Now finished move with PD")
+    time.sleep(5)
 
 tableId, cubeId, targetId = getReadyForTask()
 solution()

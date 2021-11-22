@@ -10,6 +10,7 @@ import yaml
 
 from Pybullet_Simulation_base import Simulation_base
 from time import sleep
+from scipy.interpolate import CubicSpline
 
 class Simulation(Simulation_base):
     """A Bullet simulation involving Nextage robot"""
@@ -340,7 +341,7 @@ class Simulation(Simulation_base):
 
             if np.any(orientation):
                 nextOrientation = start_orientation + (i/numSteps)*(orientation - start_orientation)
-                print(nextOrientation)
+                # print(nextOrientation)
                 posOrientationDelta = ((np.hstack((np.squeeze(nextPosition), nextOrientation))) - np.hstack((np.squeeze(currEndEffPos),currOrientation)))
                 xRefDeltas = np.linalg.pinv(currJacobian) @ posOrientationDelta
                 xRefs[:, i] = xRefs[:, i-1] + xRefDeltas
@@ -352,7 +353,6 @@ class Simulation(Simulation_base):
         self.currTrajectory['relevantJoints'] = relevantJoints
         return xRefs
 
-    # NOTE keep this function until the end, this has an implementation where IK calculates the whole trajectory first THEN move_without_pd updates each step
     def move_without_PD(self, endEffector, targetPosition, speed=0.01, orientation=None,
         threshold=1e-3, maxIter=3000, debug=False, verbose=False):
         """
@@ -473,6 +473,10 @@ class Simulation(Simulation_base):
         
         disableIntegralValue = 0
 
+        jointsToSendZero = self.joints
+        if joint != 'CHEST_JOINT0':
+            jointsToSendZero.remove(joint)
+
         for i in range(int(numSeconds/self.dt)):
             currentPosition = self.getJointPos(joint)
             # print(currentPosition)
@@ -487,6 +491,14 @@ class Simulation(Simulation_base):
 
             pltVelocity.append(currentVelocity)
             pltTorqueTime.append(i*self.dt)
+
+            for j in jointsToSendZero:
+                self.p.setJointMotorControl2(
+                    bodyIndex=self.robot,
+                    jointIndex=self.jointIds[j],
+                    controlMode=self.p.TORQUE_CONTROL,
+                    force=0
+                )
             toy_tick(targetPosition, currentPosition, targetVelocity, currentVelocity, disableIntegralValue)
 
 
@@ -534,23 +546,23 @@ class Simulation(Simulation_base):
             
             pltTime.append(i*self.dt)
             pltDistance.append(np.linalg.norm(currEndEffPos - start_pos))
+        
+        # currentPosition
+        # # while (selftargetPosition - currentPosition
+        # currEndEffPos = self.getJointPosition(endEffector)
+        # i = jointRefs.shape[1]
+        # print("entering while loop")
+        # while self.getVectorLength(targetPosition - currEndEffPos.squeeze()) > threshold:
+        #     positionsBeforeTick = {jointName:jointPos for jointName,jointPos in zip(relevantJoints, self.getJointAngles(relevantJoints)) }
 
-        # for i in range(int(numSeconds/self.dt)):
-        #     currentPosition = self.getJointPos(joint)
-        #     print(currentPosition)
-        #     pltPosition.append(currentPosition)
+        #     self.tick(jointPrevPositions)
+        #     jointPrevPositions = positionsBeforeTick
+            
         #     pltTime.append(i*self.dt)
-        #     pltTarget.append(targetPosition)
+        #     pltDistance.append(np.linalg.norm(currEndEffPos - start_pos))
+        #     i += 1
 
-        #     if i == 0:
-        #         currentVelocity = 0
-        #     else:
-        #         currentVelocity = (currentPosition - pltPosition[i-1])/self.dt
-
-        #     pltVelocity.append(currentVelocity)
-        #     pltTorqueTime.append(i*self.dt)
-        #     toy_tick(targetPosition, currentPosition, targetVelocity, currentVelocity, disableIntegralValue)
-
+        # print("out of while loop")
         return pltTime, pltDistance
         
         # Iterate through joints and use states from IK solver as reference states in PD controller.
@@ -584,7 +596,10 @@ class Simulation(Simulation_base):
             ### Implement your code from here ... ###
             # TODO: obtain torque from PD controller
             jointPosition = self.getJointPos(joint)
-            currVelocity = (jointPosition - jointPrevPositions.get(joint, jointPosition))/ self.dt
+            if jointPrevPositions:
+                currVelocity = (jointPosition - jointPrevPositions.get(joint, jointPosition))/ self.dt
+            else:
+                currVelocity = 0
             torque = self.calculateTorque(self.jointTargetPos[joint],jointPosition, 0.0, currVelocity, 0, kp, ki, kd)
             ### ... to here ###
 
@@ -613,19 +628,35 @@ class Simulation(Simulation_base):
         time.sleep(self.dt)
 
     ########## Task 3: Robot Manipulation ##########
+
+    # Accepts an Nx3 array of data points
     def cubic_interpolation(self, points, nTimes=100):
         """
         Given a set of control points, return the
         cubic spline defined by the control points,
         sampled nTimes along the curve.
         """
+        
+        xs = points[:, 0]
+        ys = points[:, 1]
+        zs = points[:, 2]
+        inputTimes = np.arange(0,points.shape[0])
+        
+        xSpline = CubicSpline(inputTimes, xs)
+        ySpline = CubicSpline(inputTimes, ys)
+        zSpline = CubicSpline(inputTimes, zs)
+
+        outputTimes = np.linspace(inputTimes[0], inputTimes[-1], nTimes)
+
+        return xSpline(outputTimes), ySpline(outputTimes), zSpline(outputTimes)
         #TODO add your code here
         # Return 'nTimes' points per dimension in 'points' (typically a 2xN array),
         # sampled from a cubic spline defined by 'points' and a boundary condition.
         # You may use methods found in scipy.interpolate
 
         #return xpoints, ypoints
-        pass
+        # pass
+
 
     # Task 3.1 Pushing
     def dockingToPosition(self, leftTargetAngle, rightTargetAngle, angularSpeed=0.005,
@@ -639,5 +670,53 @@ class Simulation(Simulation_base):
         """A template function for you, you are free to use anything else"""
         # TODO: Append your code here
         pass
+
+    def moveBothHands(self, leftTargetPos, leftTargetOrientation, rightTargetPos, rightTargetOrientation, speed=0.01, maxIter=3000):
+        
+        leftEndEffector = 'LHAND'
+        rightEndEffector = 'RHAND'
+        
+        leftRelevantJoints = self.getRelevantJoints(leftEndEffector)
+        leftRelevantJoints.remove('CHEST_JOINT0')
+        rightRelevantJoints = self.getRelevantJoints(rightEndEffector)
+        rightRelevantJoints.remove('CHEST_JOINT0')
+        bothRelevantJointSets = leftRelevantJoints + rightRelevantJoints
+
+        left_start_pos = self.getJointPosition(leftEndEffector).squeeze()
+        right_start_pos = self.getJointPosition(rightEndEffector).squeeze()
+        # print(targetPosition)
+        # print(start_pos)
+        
+        leftNumSteps = self.calIterToTarget(left_start_pos,leftTargetPos, speed)
+        rightNumSteps = self.calIterToTarget(right_start_pos,leftTargetPos, speed)
+        numSteps = max(leftNumSteps, rightNumSteps)
+        numSteps = min(numSteps, maxIter)
+        # print(numSteps)
+        leftJointRefs = self.inverseKinematics(leftEndEffector, leftTargetPos, leftTargetOrientation, {"steps": numSteps, "relevantJoints": leftRelevantJoints})
+        rightJointRefs = self.inverseKinematics(rightEndEffector, rightTargetPos, rightTargetOrientation, {"steps": numSteps, "relevantJoints": rightRelevantJoints})
+        jointPrevPositions = {jointName:jointPos for jointName,jointPos in zip(bothRelevantJointSets, self.getJointAngles(bothRelevantJointSets)) }
+
+        pltTime = []
+        pltDistance = []
+        for i in range(leftJointRefs.shape[1]):
+            leftJointConfigs = leftJointRefs[:,i]
+            rightJointConfigs = rightJointRefs[:,i]
+            bothSetsOfJointConfigs = np.hstack((leftJointConfigs, rightJointConfigs))
+            for jointName,angle in zip(bothRelevantJointSets,bothSetsOfJointConfigs):
+                self.jointTargetPos[jointName] = angle
+            
+            currLeftEndEffPos = self.getJointPosition(leftEndEffector)
+            currRightEndEffPos = self.getJointPosition(rightEndEffector)
+            # print(currEndEffPos)
+
+            positionsBeforeTick = {jointName:jointPos for jointName,jointPos in zip(bothRelevantJointSets, self.getJointAngles(bothRelevantJointSets)) }
+            
+            self.tick(jointPrevPositions)
+            jointPrevPositions = positionsBeforeTick
+            
+            pltTime.append(i*self.dt)
+            pltDistance.append(np.mean([np.linalg.norm(currLeftEndEffPos - left_start_pos),np.linalg.norm(currRightEndEffPos - right_start_pos)]))
+        
+        return pltTime, pltDistance
 
  ### END
