@@ -67,7 +67,7 @@ endEffector = "LHAND"
 targetPosition = np.array([0.37, 0.23, 1.06385])  # x,y,z coordinates in world frame
 
 # Example code. Feel free to modify
-pltTime, pltEFPosition = sim.move_without_PD(endEffector, targetPosition, speed=0.1, orientation=np.array([0,1,0]), threshold=1e-3, maxIter=3000, debug=False, verbose=False)
+pltTime, pltEFPosition = sim.move_with_PD_on_the_fly(endEffector, targetPosition, speed=0.5, orientation=np.array([0,-1,0]), threshold=1e-3, maxIter=3000, debug=False, verbose=False)
 
 time.sleep(5)
 

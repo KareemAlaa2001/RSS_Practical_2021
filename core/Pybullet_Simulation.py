@@ -225,7 +225,7 @@ class Simulation(Simulation_base):
         """Get the orientation of a joint in the world frame, leave this unchanged please."""
         return np.array(self.getJointLocationAndOrientation(jointName)[1] @ self.jointRotationAxis[jointName]).squeeze()
 
-    def jacobianMatrix(self, endEffector, relevantJoints=None):
+    def jacobianMatrix(self, endEffector, relevantJoints=None, endEffectorPosition=None, endEffectorOrientation=None):
         """Calculate the Jacobian Matrix for the Nextage Robot."""
         # TODO modify from here
         # You can implement the cross product yourself or use calculateJacobian().
@@ -241,8 +241,15 @@ class Simulation(Simulation_base):
         Jpos = np.zeros((3,len(relevantJoints)))
         Jvec = np.zeros((3,len(relevantJoints)))
 
-        endEffPos = self.getJointPosition(endEffector)
-        endEffAxis = self.getJointOrientation(endEffector)
+        if not np.any(endEffectorPosition):
+            endEffPos = self.getJointPosition(endEffector)
+        else:
+            endEffPos = endEffectorPosition
+
+        if not np.any(endEffectorOrientation):
+            endEffAxis = self.getJointOrientation(endEffector)
+        else:
+            endEffAxis = endEffectorOrientation
 
         for i in range(len(relevantJoints)):
             currJoint = relevantJoints[i]
@@ -318,12 +325,13 @@ class Simulation(Simulation_base):
         relevantJoints = frame.get('relevantJoints')
         start_pos, start_orientation = self.getJointLocationAndOrientation(endEffector)
 
+        start_orientation = start_orientation @ self.refVector
         xRefDeltas = np.zeros(len(relevantJoints))
         # print(currEndEffPos)
-        currJacobian = self.jacobianMatrix(endEffector, relevantJoints)
+        currJacobian = self.jacobianMatrix(endEffector, relevantJoints, endEffectorPosition=start_pos, endEffectorOrientation=start_orientation)
 
         if np.any(orientation):
-            posOrientationDelta = ((np.hstack((np.squeeze(targetPosition), orientation))) - np.hstack((np.squeeze(start_pos),start_orientation @ self.refVector)))
+            posOrientationDelta = ((np.hstack((np.squeeze(targetPosition), orientation))) - np.hstack((np.squeeze(start_pos),start_orientation)))
             xRefDeltas = np.linalg.pinv(currJacobian) @ posOrientationDelta
             # xRefDeltas = np.linalg.pinv(currJacobian) @ ((np.hstack((targetPosition, orientation))) - np.hstack((start_pos,start_orientation @ self.refVector)))
         else:
@@ -403,9 +411,9 @@ class Simulation(Simulation_base):
 
         # print(targetPosition)
         # print(start_pos)
-        numSteps = int(np.linalg.norm(targetPosition-start_pos)//speed)
+        numSteps = self.calIterToTarget(start_pos.squeeze(), targetPosition, speed)
         numSteps = min(numSteps, maxIter)
-        # print(numSteps)
+        print(numSteps)
 
         endEffPositionTrajectory = np.linspace(start_pos, targetPosition, numSteps)
 
@@ -665,6 +673,75 @@ class Simulation(Simulation_base):
 
         #return pltTime, pltDistance
 
+    def move_with_PD_on_the_fly(self, endEffector, targetPosition, speed=0.01, orientation=None,
+        threshold=1e-3, maxIter=3000, debug=False, verbose=False):
+        """
+        Move joints using inverse kinematics solver and using PD control.
+        This method should update joint states using the torque output from the PD controller.
+        Return:
+            pltTime, pltDistance arrays used for plotting
+        """
+        #TODO add your code here
+
+        relevantJoints = self.getRelevantJoints(endEffector)
+
+        start_pos = self.getJointPosition(endEffector).squeeze()
+        
+        # print(targetPosition)
+        # print(start_pos)
+        
+        numSteps = self.calIterToTarget(start_pos,targetPosition, speed)
+        numSteps = min(numSteps, maxIter)
+        # print(numSteps)
+
+        endEffPositionTrajectory = np.linspace(start_pos, targetPosition, numSteps)
+
+
+        if np.any(orientation):
+            startOrientation = self.getJointOrientation(endEffector)
+            endEffOrientationTrajectory = np.linspace(startOrientation, orientation, numSteps)
+
+
+        
+        jointPrevPositions = {jointName:jointPos for jointName,jointPos in zip(relevantJoints, self.getJointAngles(relevantJoints)) }
+
+        for i in range(1,numSteps):
+            
+            nextPosition = endEffPositionTrajectory[i]
+
+            if np.any(orientation):
+                nextOrientation = endEffOrientationTrajectory[i]
+            else:
+                nextOrientation = None
+
+            newXRefs = self.singleStepInverseKinematics(endEffector, nextPosition, nextOrientation, {"relevantJoints": relevantJoints})
+
+            for jointName,angle in zip(relevantJoints,newXRefs):
+                self.jointTargetPos[jointName] = angle
+            
+            # print(currEndEffPos)
+
+            positionsBeforeTick = {jointName:jointPos for jointName,jointPos in zip(relevantJoints, self.getJointAngles(relevantJoints)) }
+            
+            self.tick(jointPrevPositions)
+            jointPrevPositions = positionsBeforeTick
+        
+        currEndEffPos = self.getJointPosition(endEffector)
+
+        # currentPosition
+        while self.getVectorLength(targetPosition - currEndEffPos.squeeze()) > threshold:
+            positionsBeforeTick = {jointName:jointPos for jointName,jointPos in zip(relevantJoints, self.getJointAngles(relevantJoints)) }
+
+            self.tick(jointPrevPositions)
+            jointPrevPositions = positionsBeforeTick
+            
+            currEndEffPos = self.getJointPosition(endEffector)
+
+
+        # print("out of while loop")
+        return 
+
+
     def tick(self, jointPrevPositions=None):
         """Ticks one step of simulation using PD control."""
         # Iterate through all joints and update joint states using PD control.
@@ -760,6 +837,67 @@ class Simulation(Simulation_base):
         """A template function for you, you are free to use anything else"""
         # TODO: Append your code here
         pass
+
+    def moveBothHandsOnTheFly(self,leftTargetPos, leftTargetOrientation, rightTargetPos, rightTargetOrientation, speed=0.01, maxIter=3000):
+        leftEndEffector = 'LHAND'
+        rightEndEffector = 'RHAND'
+        
+        usingLeftOrientation =  np.any(leftTargetOrientation)
+        usingRightOrientation = np.any(rightTargetOrientation)
+
+        leftRelevantJoints = self.getRelevantJoints(leftEndEffector)
+        leftRelevantJoints.remove('CHEST_JOINT0')
+        rightRelevantJoints = self.getRelevantJoints(rightEndEffector)
+        rightRelevantJoints.remove('CHEST_JOINT0')
+        bothRelevantJointSets = leftRelevantJoints + rightRelevantJoints
+
+        left_start_pos = self.getJointPosition(leftEndEffector).squeeze()
+        right_start_pos = self.getJointPosition(rightEndEffector).squeeze()
+        
+        leftNumSteps = self.calIterToTarget(left_start_pos,leftTargetPos, speed)
+        rightNumSteps = self.calIterToTarget(right_start_pos,leftTargetPos, speed)
+        numSteps = max(leftNumSteps, rightNumSteps)
+        numSteps = min(numSteps, maxIter)
+
+        leftPositionTrajectory = np.linspace(left_start_pos, leftTargetPos, numSteps)
+        rightPositionTrajectory = np.linspace(right_start_pos, rightTargetPos, numSteps)
+
+        if usingLeftOrientation:
+            leftStartOrientation = self.getJointOrientation(leftEndEffector)
+            leftOrientationTrajectory = np.linspace(leftStartOrientation, leftTargetOrientation, numSteps)
+
+        if usingRightOrientation:
+            rightStartOrientation = self.getJointOrientation(rightEndEffector)
+            rightOrientationTrajectory = np.linspace(rightStartOrientation, rightTargetOrientation, numSteps)
+
+        jointPrevPositions = {jointName:jointPos for jointName,jointPos in zip(bothRelevantJointSets, self.getJointAngles(bothRelevantJointSets)) }
+
+        for i in range(1,numSteps):
+            leftNextPosition = leftPositionTrajectory[i]
+            rightNextPosition = rightPositionTrajectory[i]
+
+            leftNextOrientation = None
+            rightNextOrientation = None
+            if usingLeftOrientation:
+                leftNextOrientation = leftOrientationTrajectory[i]
+
+            if usingRightOrientation:
+                rightNextOrientation = rightOrientationTrajectory[i]
+
+            leftJointConfigs = self.singleStepInverseKinematics(leftEndEffector, leftNextPosition, leftNextOrientation, {"relevantJoints": leftRelevantJoints})
+            rightJointConfigs = self.singleStepInverseKinematics(rightEndEffector, rightNextPosition, rightNextOrientation, {"relevantJoints": rightRelevantJoints})
+
+            bothSetsOfJointConfigs = np.hstack((leftJointConfigs, rightJointConfigs))
+            for jointName,angle in zip(bothRelevantJointSets,bothSetsOfJointConfigs):
+                self.jointTargetPos[jointName] = angle
+            
+            positionsBeforeTick = {jointName:jointPos for jointName,jointPos in zip(bothRelevantJointSets, self.getJointAngles(bothRelevantJointSets)) }
+            
+            self.tick(jointPrevPositions)
+            jointPrevPositions = positionsBeforeTick
+        
+        return
+                        
 
     def moveBothHands(self, leftTargetPos, leftTargetOrientation, rightTargetPos, rightTargetOrientation, speed=0.01, maxIter=3000):
         
