@@ -105,35 +105,17 @@ def solution():
     print(sim.getJointPosition('RHAND'))
 
     sim.moveBothHands(np.array([0.42, 0.2, 1.0]),np.array([0, -1, 0]), np.array([0.42, 0.12, 1.0]),np.array([0, 1, 0]),speed=0.1)
-    # sim.moveBothHands(np.array([0.42, 0.2, 1.0]),np.array([0, -1, 0]), np.array([0.42, 0.1, 1.0]),np.array([0, 1, 0]),speed=0.1)
 
     sim.moveBothHands(np.array([0.45, 0.2, 1.2]),np.array([0, -1, 0]), np.array([0.42, 0.1, 1.2]),np.array([0, 1, 0]),speed=0.1)
-    # sim.moveBothHands(np.array([0.22, 0.4, 1.2]),np.array([0, -1, 1]), np.array([0.22, 0.3, 1.2]),np.array([0, 1, 1]),speed=0.05)
-    # sim.moveBothHands(np.array([0.42, 0.2, 1.25]),np.array([0, -1, 0]), np.array([0.42, 0.15, 1.25]),np.array([0, 1, 0]),speed=0.1)
-
-    # sim.moveJoint('CHEST_JOINT0', np.deg2rad(45), 0, numSeconds=0.1)
+    
     sim.moveJointInConjuction('CHEST_JOINT0', np.deg2rad(50), angularSpeed=0.01)
     print(sim.getJointPosition('LHAND'))
     print(sim.getJointPosition('RHAND'))
-    sim.moveBothHands(np.array([0.2, 0.55, 1.0]),np.array([0, 0, 0]), np.array([0.28, 0.45, 1.0]),np.array([0, 0, 0]),speed=0.02)
-    
-    # chest_movements = np.linspace(sim.getJointPos('CHEST_JOINT0'), np.deg2rad(90), 30)
-    
+    sim.moveBothHands(np.array([0.2, 0.55, 1.0]),np.array([0, 0, 0]), np.array([0.28, 0.45, 1.0]),np.array([0, 0, 0]),speed=0.1)
+    sim.moveBothHands(np.array([0.2, 0.55, 1.0]),np.array([0, 0, 0]), np.array([0.35, 0.35, 1.0]),np.array([0, 0, 0]),speed=0.1)
 
-    # for pos in chest_movements:
-    #     sim.moveJointInConjuction('CHEST_JOINT0', pos, angularSpeed=0.1)
-    # sim.moveBothHands(np.array([0.42, 0.2, 1.3]),np.array([0, -1, 0]), np.array([0.42, 0.15, 1.3]),np.array([0, 1, 0]),speed=0.1)
-
-    # sim.moveBothHands(np.array([0.42, 0.2, 1.0]),np.array([0, -1, 0]), np.array([0.42, 0.15, 1.0]),np.array([0, 1, 0]),speed=0.1)
-    # sim.move_with_PD('LHAND', np.array([0.42, 0.2, 1.0]), orientation=np.array([0, -1, 0]), speed=0.1, maxIter=3000, debug=False, verbose=False)
-    # sim.move_with_PD('RHAND', np.array([0.42, 0.0, 1.0]), orientation=np.array([0, 1, 0]), speed=0.05, maxIter=3000, debug=False, verbose=False)
     print(sim.getJointPosition('LHAND'))
     print(sim.getJointPosition('RHAND'))
-    # sim.move_with_PD('RHAND', np.array([0.42, 0.17, 1.0]), orientation=np.array([0, 1, 0]), speed=0.05, maxIter=3000, debug=False, verbose=False)
-    # sim.move_with_PD('LHAND', np.array([0.42, 0.2, 1.0]), orientation=np.array([0, -1, 0]), speed=0.05, maxIter=3000, debug=False, verbose=False)
-    # sim.move_with_PD('RHAND', np.array([0.42, 0.18, 1.0]), orientation=np.array([0, 1, 0]), speed=0.05, maxIter=3000, debug=False, verbose=False)
-
-    # sim.move_with_PD('LHAND', np.array([0.389, 0.17, 1.0]), orientation=np.array([0, -1, 0]), speed=0.05, maxIter=3000, debug=False, verbose=False)
 
     time.sleep(5)
 
