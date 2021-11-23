@@ -709,11 +709,11 @@ class Simulation(Simulation_base):
         return pltTime, pltDistance
 
     # NOTE takes in the target angle in radians
-    def moveJointInConjuction(self, jointName, targetPosition, angularSpeed=0.1, maxIter=100):
+    def moveJointInConjuction(self, jointName, targetPosition, angularSpeed=0.1, maxIter=3000):
         startPosition = self.getJointPos(jointName)
 
         numSteps = min(maxIter, self.calIterToTarget(startPosition,targetPosition, angularSpeed))
-
+        print(numSteps)
         jointPositions = np.linspace(startPosition, targetPosition, numSteps)
 
         otherJoints = self.joints
