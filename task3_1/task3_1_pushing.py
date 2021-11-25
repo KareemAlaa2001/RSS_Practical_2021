@@ -90,34 +90,27 @@ def getReadyForTask():
 
 
 def solution():
-    # TODO: Add your code here
-    # print(sim.getJointPosition('LHAND'))
-    
 
     sim.move_with_PD('LHAND', np.array([0.083, 0.232, 0.89]), orientation=np.array([0, -1, 0]), speed=0.1, maxIter=3000, debug=False, verbose=False)
     sim.move_with_PD('LHAND', np.array([0.083, 0.12, 0.89]), orientation=np.array([0, -1, 0]), speed=0.1, maxIter=3000, debug=False, verbose=False)
     sim.move_with_PD('LHAND', np.array([0.58, 0.065, 0.89]), orientation=np.array([0, -1, 0.0]), speed=0.01, maxIter=3000, debug=False, verbose=False)
     sim.move_with_PD('LHAND', np.array([0.57, 0.1, 1.0]), orientation=np.array([0, -1, 0.0]), speed=0.1, maxIter=3000, debug=False, verbose=False)
     print(sim.getJointPosition('LHAND'))
-    # print(sim.getJointPosition('RHAND'))
-
-    # sim.moveBothHandsOnTheFly( np.array([0.083, 0.232, 0.92]), np.array([0, -1, 0]), np.array([0.083, 0.0, 0.92]), np.array([0, 1, 0]), speed=0.5, maxIter=3000)
-    # print(sim.getJointPosition('LHAND'))
-    # print(sim.getJointPosition('RHAND'))
-    # sim.moveBothHandsOnTheFly( np.array([0.083, 0.12, 0.92]), np.array([0, -1, 0]), np.array([0.083, 0.02, 0.92]), np.array([0, 1, 0]), speed=0.5, maxIter=3000)
-
-    # sim.move_with_PD_on_the_fly('LHAND', np.array([0.083, 0.232, 0.9]), orientation=np.array([0, -1, 0]), speed=0.5, maxIter=3000, debug=False, verbose=False, threshold=0.05)
-    # sim.move_with_PD_on_the_fly('LHAND', np.array([0.25, 0.15, 0.9]), orientation=np.array([0, -1, 0]), speed=0.5, maxIter=3000, debug=False, verbose=False, threshold=0.05)
-
-    # sim.move_with_PD_on_the_fly('LHAND', np.array([0.4, 0.15, 0.9]), orientation=np.array([0, -1, 0.0]), speed=0.05, maxIter=3000, debug=False, verbose=False, threshold=0.05)
-    # sim.move_with_PD_on_the_fly('LHAND', np.array([0.35, 0.2, 0.92]), orientation=np.array([0, -1, 0.0]), speed=0.05, maxIter=3000, debug=False, verbose=False, threshold=0.05)
-
-    # sim.move_with_PD_on_the_fly('LHAND', np.array([0.55, 0.2, 0.9]), orientation=np.array([0, -1, 0.0]), speed=0.02, maxIter=3000, debug=False, verbose=False, threshold=0.05)
-    
-    # sim.move_with_PD_on_the_fly('LHAND', np.array([0.53, 0.12, 1.0]), orientation=np.array([0, -1, 0.0]), speed=0.1, maxIter=3000, debug=False, verbose=False, threshold=0.05)
-
     print("Now finished move with PD")
     time.sleep(5)
 
 tableId, cubeId, targetId = getReadyForTask()
 solution()
+
+print("Cube position:")
+cubePosition=sim.p.getBasePositionAndOrientation(cubeId)
+
+print(cubePosition)
+
+print("Target position:")
+targetPosition=sim.p.getBasePositionAndOrientation(targetId)
+print(targetPosition)
+
+print("Difference in position:")
+diff=sim.getVectorLength(np.array(cubePosition[0])-np.array(targetPosition[0]))
+print(diff)

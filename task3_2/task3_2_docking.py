@@ -100,7 +100,6 @@ def getReadyForTask():
 
 
 def solution():
-    # TODO: Add your code here
     print(sim.getJointPosition('LHAND'))
     print(sim.getJointPosition('RHAND'))
 
@@ -117,7 +116,18 @@ def solution():
     print(sim.getJointPosition('LHAND'))
     print(sim.getJointPosition('RHAND'))
 
-    time.sleep(5)
-
 tableId, cubeId, targetId = getReadyForTask()
 solution()
+
+print("Cube position:")
+cubePosition=sim.p.getBasePositionAndOrientation(cubeId)
+
+print(cubePosition)
+
+print("Target position:")
+targetPosition=sim.p.getBasePositionAndOrientation(targetId)
+print(targetPosition)
+
+print("Difference in position:")
+diff=sim.getVectorLength(np.array(cubePosition[0])-np.array(targetPosition[0]))
+print(diff)
